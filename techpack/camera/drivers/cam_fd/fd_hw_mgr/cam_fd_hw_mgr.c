@@ -854,6 +854,7 @@ static int cam_fd_mgr_util_submit_frame(void *priv, void *data)
 	trace_cam_submit_to_hw("FD", frame_req->request_id);
 
 	list_del_init(&frame_req->list);
+	mutex_unlock(&hw_mgr->frame_req_mutex);
 
 	if (hw_device->hw_intf->hw_ops.start) {
 		start_args.hw_ctx = hw_ctx;
@@ -869,13 +870,11 @@ static int cam_fd_mgr_util_submit_frame(void *priv, void *data)
 		if (rc) {
 			CAM_ERR(CAM_FD, "Failed in HW Start %d", rc);
 			mutex_unlock(&hw_device->lock);
-			mutex_unlock(&hw_mgr->frame_req_mutex);
 			goto put_req_into_free_list;
 		}
 	} else {
 		CAM_ERR(CAM_FD, "Invalid hw_ops.start");
 		mutex_unlock(&hw_device->lock);
-		mutex_unlock(&hw_mgr->frame_req_mutex);
 		rc = -EPERM;
 		goto put_req_into_free_list;
 	}
@@ -886,7 +885,6 @@ static int cam_fd_mgr_util_submit_frame(void *priv, void *data)
 	list_add_tail(&frame_req->list, &hw_mgr->frame_processing_list);
 
 	mutex_unlock(&hw_device->lock);
-	mutex_unlock(&hw_mgr->frame_req_mutex);
 
 	return rc;
 
