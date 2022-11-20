@@ -37,7 +37,7 @@
 #include "aw8697_reg.h"
 #include "aw869xx_reg.h"
 #include "aw8697.h"
-#include "ringbuffer.h"
+#include "../aw_ringbuffer/ringbuffer.h"
 
 /******************************************************
  *

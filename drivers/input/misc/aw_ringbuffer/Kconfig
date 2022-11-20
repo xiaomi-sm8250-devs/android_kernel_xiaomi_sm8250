@@ -1,0 +1,13 @@
+#
+# Awinic ringbuffer lib
+#
+
+config AW_RINGBUFFER
+	tristate "Awinic ringbuffer lib"
+	help
+	  Say Y here if you want to include ringbuffer utils for
+	  Awinic drivers.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here.

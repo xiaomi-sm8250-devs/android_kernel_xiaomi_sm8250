@@ -35,7 +35,7 @@
 #include <sound/control.h>
 #include <sound/soc.h>
 #include "aw_haptic.h"
-#include "ringbuffer.h"
+#include "../aw_ringbuffer/ringbuffer.h"
 #include "aw_config.h"
 #include "aw86907.h"
 

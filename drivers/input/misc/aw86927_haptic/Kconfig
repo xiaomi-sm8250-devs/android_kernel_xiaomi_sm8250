@@ -5,6 +5,7 @@
 config INPUT_AW86927_HAPTIC
 	tristate "Awinic AW86927 HAPTIC"
 	depends on I2C
+	select AW_RINGBUFFER
 	help
 	  Say Y here if you have Awinic AW86927 haptic controller
 	  chip in your system.

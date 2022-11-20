@@ -30,7 +30,7 @@
 #include <linux/syscalls.h>
 #include <linux/power_supply.h>
 #include <linux/pm_qos.h>
-#include "ringbuffer.h"
+#include "../aw_ringbuffer/ringbuffer.h"
 #include "aw_haptic.h"
 #include "aw869x.h"
 #include "aw86927.h"
