@@ -4,6 +4,7 @@
  * Version: v1.1.3
  *
  * Copyright (c) 2019 AWINIC Technology CO., LTD
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  *  Author: Nick Li <zhangzetao@awinic.com.cn>
  *
@@ -32,12 +33,11 @@
 #include <linux/power_supply.h>
 #include <linux/vmalloc.h>
 #include <linux/pm_qos.h>
-#include <linux/string.h>
 #include "aw8697_config.h"
 #include "aw8697_reg.h"
 #include "aw869xx_reg.h"
 #include "aw8697.h"
-#include "../aw_ringbuffer/ringbuffer.h"
+#include "ringbuffer.h"
 
 /******************************************************
  *
@@ -72,17 +72,13 @@ struct pm_qos_request pm_qos_req_vb;
  ******************************************************/
 #define AW8697_RTP_NAME_MAX 64
 static char *aw8697_ram_name = "aw8697_haptic.bin";
-#ifdef SUPPORT_RELOAD_FW
-static char *aw8697_ram_name_a = "aw8697_haptic_a.bin";
-static char aw8697_rtp_name_a[AW8697_RTP_NAME_MAX];
-#endif
 #ifdef TEST_RTP
 static char aw8697_rtp_name[][AW8697_RTP_NAME_MAX] = {
 	{ "aw8697_rtp_1.bin" },
 };
 #else
 static char aw8697_rtp_name[][AW8697_RTP_NAME_MAX] = {
-	{ "aw8697_rtp_1.bin" }, //10
+	{ "aw8697_rtp_1.bin" }, //8
 	{ "aw8697_rtp_1.bin" },
 	{ "aw8697_rtp_1.bin" },
 	{ "aw8697_rtp_1.bin" },
@@ -120,7 +116,7 @@ static char aw8697_rtp_name[][AW8697_RTP_NAME_MAX] = {
 	{ "MiRemix_RTP.bin" },
 	{ "Mountain_Spring_RTP.bin" },
 	{ "Orange_RTP.bin" },
-	{ "WindChime_RTP.bin" },
+	{ "Raindrops_RTP.bin" },
 	{ "Space_Age_RTP.bin" },
 	{ "ToyRobot_RTP.bin" },
 	{ "Vigor_RTP.bin" },
@@ -236,37 +232,6 @@ static char aw8697_rtp_name[][AW8697_RTP_NAME_MAX] = {
 	{ "FOD_Motion_Ripple_RTP.bin" },
 	{ "FOD_Motion_Spiral_RTP.bin" },
 	{ "gamebox_launch_rtp.bin" }, // 161
-	{ "Gesture_Back_Pull_RTP.bin" }, // 162
-	{ "Gesture_Back_Release_RTP.bin" }, // 163
-	{ "alert_rtp.bin" }, // 164
-	{ "feedback_negative_light_rtp.bin" }, // 165
-	{ "feedback_neutral_rtp.bin" }, // 166
-	{ "feedback_positive_rtp.bin" }, // 167
-	{ "fingerprint_record_rtp.bin" }, // 168
-	{ "lockdown_rtp.bin" }, // 169
-	{ "sliding_damping_rtp.bin" }, // 170
-	{ "todo_alldone_rtp.bin" }, // 171
-	{ "uninstall_animation_icon_rtp.bin" }, // 172
-	{ "signal_button_highlight_rtp.bin" }, //173
-	{ "signal_button_negative_rtp.bin" },
-	{ "signal_button_rtp.bin" },
-	{ "signal_clock_high_rtp.bin" }, //176
-	{ "signal_clock_rtp.bin" },
-	{ "signal_clock_unit_rtp.bin" },
-	{ "signal_inputbox_rtp.bin" },
-	{ "signal_key_high_rtp.bin" },
-	{ "signal_key_unit_rtp.bin" }, //181
-	{ "signal_list_highlight_rtp.bin" },
-	{ "signal_list_rtp.bin" },
-	{ "signal_picker_rtp.bin" },
-	{ "signal_popup_rtp.bin" },
-	{ "signal_seekbar_rtp.bin" }, //186
-	{ "signal_switch_rtp.bin" },
-	{ "signal_tab_rtp.bin" },
-	{ "signal_text_rtp.bin" },
-	{ "signal_transition_light_rtp.bin" },
-	{ "signal_transition_rtp.bin" }, //191
-	{ "haptics_video_rtp.bin" }, //192
 };
 #endif
 static int CUSTOME_WAVE_ID;
@@ -752,19 +717,19 @@ static void aw8697_ram_loaded(const struct firmware *cont, void *context)
 	pr_info("%s enter\n", __func__);
 
 	if (!cont) {
-		pr_err("%s: failed to read %s\n", __func__, aw8697->ram_name);
+		pr_err("%s: failed to read %s\n", __func__, aw8697_ram_name);
 		release_firmware(cont);
 		return;
 	}
 
-	pr_info("%s: loaded %s - size: %zu\n", __func__, aw8697->ram_name,
+	pr_info("%s: loaded %s - size: %zu\n", __func__, aw8697_ram_name,
 		cont ? cont->size : 0);
 	/*
 	for(i=0; i<cont->size; i++) {
 		pr_info("%s: addr:0x%04x, data:0x%02x\n", __func__, i, *(cont->data+i));
 	}
 	*/
-	pr_info("%s: loaded %s - size: %zu bytes\n", __func__, aw8697->ram_name,
+	pr_info("%s: loaded %s - size: %zu bytes\n", __func__, aw8697_ram_name,
 		cont ? cont->size : 0);
 	/* check sum */
 	for (i = 2; i < cont->size; i++) {
@@ -802,12 +767,11 @@ static void aw8697_ram_loaded(const struct firmware *cont, void *context)
 	kfree(aw8697_fw);
 
 	aw8697->ram_init = 1;
-
+	pr_info("%s: fw update complete\n", __func__);
 	if (aw8697->chip_version == AW8697_CHIP_9X) {
 		aw8697_haptic_trig_enable_config(aw8697);
 		aw8697_rtp_update(aw8697);
 	}
-	pr_info("%s: fw update complete\n", __func__);
 }
 
 static int aw8697_ram_update(struct aw8697 *aw8697)
@@ -815,8 +779,8 @@ static int aw8697_ram_update(struct aw8697 *aw8697)
 	aw8697->ram_init = 0;
 	aw8697->rtp_init = 0;
 	return request_firmware_nowait(THIS_MODULE, FW_ACTION_HOTPLUG,
-				       aw8697->ram_name, aw8697->dev,
-				       GFP_KERNEL, aw8697, aw8697_ram_loaded);
+				       aw8697_ram_name, aw8697->dev, GFP_KERNEL,
+				       aw8697, aw8697_ram_loaded);
 }
 
 #ifdef AWINIC_RAM_UPDATE_DELAY
@@ -835,14 +799,12 @@ static int aw8697_ram_init(struct aw8697 *aw8697)
 {
 #ifdef AWINIC_RAM_UPDATE_DELAY
 	int ram_timer_val = 5000;
-	aw8697->ram_name = aw8697_ram_name;
 	INIT_DELAYED_WORK(&aw8697->ram_work, aw8697_ram_work_routine);
 	//schedule_delayed_work(&aw8697->ram_work,
 	//msecs_to_jiffies(ram_timer_val));
 	queue_delayed_work(aw8697->work_queue, &aw8697->ram_work,
 			   msecs_to_jiffies(ram_timer_val));
 #else
-	aw8697->ram_name = aw8697_ram_name;
 	aw8697_ram_update(aw8697);
 #endif
 	return 0;
@@ -1787,13 +1749,8 @@ static int aw8697_haptic_read_f0(struct aw8697 *aw8697)
 	f0_reg |= (reg_val << 0);
 	if (!f0_reg) {
 		pr_info("%s: not get f0_reg value is 0!\n", __func__);
-#ifdef RETRY_F0_CHECK
-		aw8697->f0 = 0;
-#endif
-		aw8697->f0_cali_status = false;
 		return 0;
 	}
-	aw8697->f0_cali_status = true;
 	f0_tmp = 1000000000 / (f0_reg * aw8697->info.f0_coeff);
 	aw8697->f0 = (unsigned int)f0_tmp;
 	pr_info("%s f0=%d\n", __func__, aw8697->f0);
@@ -1947,7 +1904,6 @@ static int aw8697_haptic_rtp_init(struct aw8697 *aw8697)
 	bool rtp_start = true;
 	pm_qos_add_request(&pm_qos_req_vb, PM_QOS_CPU_DMA_LATENCY,
 			   PM_QOS_VALUE_VB);
-	mutex_lock(&aw8697->rtp_lock);
 	aw8697->rtp_cnt = 0;
 	while ((!aw8697_haptic_rtp_get_fifo_afi(aw8697)) &&
 	       (aw8697->play_mode == AW8697_HAPTIC_RTP_MODE) &&
@@ -1984,7 +1940,6 @@ static int aw8697_haptic_rtp_init(struct aw8697 *aw8697)
 			if (aw8697->rtp_cnt == aw8697_rtp->len) {
 				aw8697->rtp_cnt = 0;
 				aw8697_haptic_set_rtp_aei(aw8697, false);
-				mutex_unlock(&aw8697->rtp_lock);
 				pm_qos_remove_request(&pm_qos_req_vb);
 				return 0;
 			}
@@ -1997,7 +1952,6 @@ static int aw8697_haptic_rtp_init(struct aw8697 *aw8697)
 					__func__);
 				aw8697->rtp_cnt = 0;
 				aw8697_haptic_set_rtp_aei(aw8697, false);
-				mutex_unlock(&aw8697->rtp_lock);
 				pm_qos_remove_request(&pm_qos_req_vb);
 				return 0;
 			}
@@ -2008,7 +1962,6 @@ static int aw8697_haptic_rtp_init(struct aw8697 *aw8697)
 		aw8697_haptic_set_rtp_aei(aw8697, true);
 	}
 	pr_info("%s: exit\n", __func__);
-	mutex_unlock(&aw8697->rtp_lock);
 	pm_qos_remove_request(&pm_qos_req_vb);
 	return 0;
 }
@@ -2027,7 +1980,6 @@ static int aw869xx_haptic_rtp_init(struct aw8697 *aw8697)
 {
 	unsigned int buf_len = 0;
 	unsigned char glb_state_val = 0;
-	unsigned int period_size = aw8697->ram.base_addr >> 2;
 
 	aw_dev_info(aw8697->dev, "%s enter\n", __func__);
 	pm_qos_add_request(&pm_qos_req_vb, PM_QOS_CPU_DMA_LATENCY,
@@ -2039,59 +1991,40 @@ static int aw869xx_haptic_rtp_init(struct aw8697 *aw8697)
 	       !atomic_read(&aw8697->exit_in_rtp_loop)) {
 		aw_dev_info(aw8697->dev, "%s rtp cnt = %d\n", __func__,
 			    aw8697->rtp_cnt);
-		if (aw8697->is_custom_wave == 0) {
-			if (!aw8697_rtp) {
-				aw_dev_info(aw8697->dev,
-					    "%s:aw8697_rtp is null, break!\n",
-					    __func__);
-				break;
-			}
-			if (aw8697->rtp_cnt < (aw8697->ram.base_addr)) {
-				if ((aw8697_rtp->len - aw8697->rtp_cnt) <
-				    (aw8697->ram.base_addr)) {
-					buf_len = aw8697_rtp->len -
-						  aw8697->rtp_cnt;
-				} else {
-					buf_len = aw8697->ram.base_addr;
-				}
-			} else if ((aw8697_rtp->len - aw8697->rtp_cnt) <
-				   (aw8697->ram.base_addr >> 2)) {
+		if (!aw8697_rtp) {
+			aw_dev_info(aw8697->dev,
+				    "%s:aw8697_rtp is null, break!\n",
+				    __func__);
+			break;
+		}
+		if (aw8697->rtp_cnt < (aw8697->ram.base_addr)) {
+			if ((aw8697_rtp->len - aw8697->rtp_cnt) <
+			    (aw8697->ram.base_addr)) {
 				buf_len = aw8697_rtp->len - aw8697->rtp_cnt;
 			} else {
-				buf_len = aw8697->ram.base_addr >> 2;
+				buf_len = aw8697->ram.base_addr;
 			}
-			aw_dev_info(aw8697->dev, "%s buf_len = %d\n", __func__,
-				    buf_len);
-			aw8697_i2c_writes(aw8697, AW869XX_REG_RTPDATA,
-					  &aw8697_rtp->data[aw8697->rtp_cnt],
-					  buf_len);
-			aw8697->rtp_cnt += buf_len;
-			aw8697_i2c_read(aw8697, AW869XX_REG_GLBRD5,
-					&glb_state_val);
-			if ((aw8697->rtp_cnt == aw8697_rtp->len) ||
-			    ((glb_state_val & 0x0f) == 0x00)) {
-				aw_dev_info(aw8697->dev,
-					    "%s: rtp update complete!\n",
-					    __func__);
-				aw8697->rtp_cnt = 0;
-				//pm_qos_remove_request(&pm_qos_req_vb);
-				//mutex_unlock(&aw8697->rtp_lock);
-				//return 0;
-				break;
-			}
+		} else if ((aw8697_rtp->len - aw8697->rtp_cnt) <
+			   (aw8697->ram.base_addr >> 2)) {
+			buf_len = aw8697_rtp->len - aw8697->rtp_cnt;
 		} else {
-			buf_len = read_rb(aw8697_rtp->data, period_size);
-			aw8697_i2c_writes(aw8697, AW869XX_REG_RTPDATA,
-					  aw8697_rtp->data, buf_len);
-			if (buf_len < period_size) {
-				pr_info("%s: custom rtp update complete\n",
-					__func__);
-				aw8697->rtp_cnt = 0;
-				aw8697_haptic_set_rtp_aei(aw8697, false);
-				mutex_unlock(&aw8697->rtp_lock);
-				pm_qos_remove_request(&pm_qos_req_vb);
-				return 0;
-			}
+			buf_len = aw8697->ram.base_addr >> 2;
+		}
+		aw_dev_info(aw8697->dev, "%s buf_len = %d\n", __func__,
+			    buf_len);
+		aw8697_i2c_writes(aw8697, AW869XX_REG_RTPDATA,
+				  &aw8697_rtp->data[aw8697->rtp_cnt], buf_len);
+		aw8697->rtp_cnt += buf_len;
+		aw8697_i2c_read(aw8697, AW869XX_REG_GLBRD5, &glb_state_val);
+		if ((aw8697->rtp_cnt == aw8697_rtp->len) ||
+		    ((glb_state_val & 0x0f) == 0x00)) {
+			aw_dev_info(aw8697->dev, "%s: rtp update complete!\n",
+				    __func__);
+			aw8697->rtp_cnt = 0;
+			//pm_qos_remove_request(&pm_qos_req_vb);
+			//mutex_unlock(&aw8697->rtp_lock);
+			//return 0;
+			break;
 		}
 	}
 	mutex_unlock(&aw8697->rtp_lock);
@@ -2652,28 +2585,6 @@ static void aw8697_rtp_work_routine(struct work_struct *work)
 					 AW8697_RTP_NAME_MAX) -
 					1;
 
-#ifdef SUPPORT_RELOAD_FW
-			if (aw8697->vov == 1) {
-				/* fw loaded */
-				memset(aw8697_rtp_name_a, 0,
-				       AW8697_RTP_NAME_MAX);
-				strncpy(aw8697_rtp_name_a,
-					aw8697_rtp_name[aw8697->rtp_file_num],
-					strlen(aw8697_rtp_name
-						       [aw8697->rtp_file_num]) -
-						4);
-				strcat(aw8697_rtp_name_a, "_a.bin");
-				ret = request_firmware(&rtp_file,
-						       aw8697_rtp_name_a,
-						       aw8697->dev);
-				if (ret < 0) {
-					pr_err("%s: failed to read %s\n",
-					       __func__, aw8697_rtp_name_a);
-				} else {
-					goto RTP_REQUEST_DONE;
-				}
-			}
-#endif
 			/* fw loaded */
 			ret = request_firmware(
 				&rtp_file,
@@ -2686,9 +2597,7 @@ static void aw8697_rtp_work_routine(struct work_struct *work)
 				mutex_unlock(&aw8697->lock);
 				return;
 			}
-#ifdef SUPPORT_RELOAD_FW
-		RTP_REQUEST_DONE:
-#endif
+
 			vfree(aw8697_rtp);
 			aw8697_rtp = vmalloc(rtp_file->size + sizeof(int));
 			if (!aw8697_rtp) {
@@ -2720,9 +2629,7 @@ static void aw8697_rtp_work_routine(struct work_struct *work)
 		aw8697->rtp_init = 1;
 
 		/* ram_vbat_compensate( */
-#ifndef RTP_SET_GAIN
 		aw8697_haptic_ram_vbat_comp(aw8697, false);
-#endif
 
 		/* rtp mode config */
 		aw8697_haptic_play_mode(aw8697, AW8697_HAPTIC_RTP_MODE);
@@ -2906,11 +2813,7 @@ static int aw869xx_haptic_read_lra_f0(struct aw8697 *aw8697)
 		aw_dev_err(aw8697->dev,
 			   "%s didn't get lra f0 because f0_reg value is 0!\n",
 			   __func__);
-#ifdef RETRY_F0_CHECK
-		aw8697->f0 = 0;
-#else
 		aw8697->f0 = aw8697->info.f0_pre;
-#endif
 		return ret;
 	} else {
 		f0_tmp = 384000 * 10 / f0_reg;
@@ -2961,10 +2864,6 @@ static int aw869xx_haptic_cont_get_f0(struct aw8697 *aw8697)
 	aw8697->f0 = aw8697->info.f0_pre;
 	/* enter standby mode */
 	aw8697_haptic_stop(aw8697);
-#ifdef RETRY_F0_CHECK
-	aw8697_i2c_write_bits(aw8697, AW869XX_REG_TRIMCFG3,
-			      AW869XX_BIT_TRIMCFG3_TRIM_LRA_MASK, 0x00);
-#endif
 	/* f0 calibrate work mode */
 	aw8697_haptic_play_mode(aw8697, AW8697_HAPTIC_CONT_MODE);
 	/* enable f0 detect */
@@ -2982,7 +2881,6 @@ static int aw869xx_haptic_cont_get_f0(struct aw8697 *aw8697)
 			      AW869XX_BIT_PLAYCFG3_BRK_EN_MASK,
 			      AW869XX_BIT_PLAYCFG3_BRK_ENABLE);
 	/* LRA OSC Source */
-#ifndef RETRY_F0_CHECK
 	if (aw8697->f0_cali_flag == AW8697_HAPTIC_CALI_F0) {
 		aw8697_i2c_write_bits(aw8697, AW869XX_REG_TRIMCFG3,
 				      AW869XX_BIT_TRIMCFG3_LRA_TRIM_SRC_MASK,
@@ -2992,7 +2890,6 @@ static int aw869xx_haptic_cont_get_f0(struct aw8697 *aw8697)
 				      AW869XX_BIT_TRIMCFG3_LRA_TRIM_SRC_MASK,
 				      AW869XX_BIT_TRIMCFG3_LRA_TRIM_SRC_EFUSE);
 	}
-#endif
 
 	/* f0 driver level */
 	aw8697_i2c_write_bits(aw8697, AW869XX_REG_CONTCFG6,
@@ -3032,9 +2929,6 @@ static int aw869xx_haptic_cont_get_f0(struct aw8697 *aw8697)
 				aw8697->dev,
 				"%s entered standby mode! glb_state=0x%02X\n",
 				__func__, reg_val);
-#ifdef RETRY_F0_CHECK
-			break;
-#endif
 		} else {
 			cnt--;
 			aw_dev_dbg(
@@ -3214,16 +3108,6 @@ static int aw8697_haptic_cont(struct aw8697 *aw8697)
 }
 
 #ifndef USE_CONT_F0_CALI
-static int aw8697_get_glb_state(struct aw8697 *aw8697)
-{
-	unsigned char glb_state_val = 0;
-
-	aw8697_i2c_read(aw8697, AW8697_REG_GLB_STATE, &glb_state_val);
-	return glb_state_val;
-}
-#endif
-
-#ifndef USE_CONT_F0_CALI
 /*****************************************************
  *
  * haptic f0 cali
@@ -3232,7 +3116,7 @@ static int aw8697_get_glb_state(struct aw8697 *aw8697)
 static int aw8697_haptic_get_f0(struct aw8697 *aw8697)
 {
 	int ret = 0;
-	unsigned char i = 0;
+	/*unsigned char i = 0; */
 	unsigned char reg_val = 0;
 	unsigned char f0_pre_num = 0;
 	unsigned char f0_wait_num = 0;
@@ -3240,7 +3124,7 @@ static int aw8697_haptic_get_f0(struct aw8697 *aw8697)
 	unsigned char f0_trace_num = 0;
 	unsigned int t_f0_ms = 0;
 	unsigned int t_f0_trace_ms = 0;
-	unsigned int f0_cali_cnt = 50;
+	/*unsigned int f0_cali_cnt = 50; */
 
 	pr_info("%s enter\n", __func__);
 
@@ -3248,9 +3132,6 @@ static int aw8697_haptic_get_f0(struct aw8697 *aw8697)
 
 	/* f0 calibrate work mode */
 	aw8697_haptic_stop(aw8697);
-#ifdef RETRY_F0_CHECK
-	aw8697_i2c_write(aw8697, AW8697_REG_TRIM_LRA, 0x00);
-#endif
 	aw8697_haptic_play_mode(aw8697, AW8697_HAPTIC_CONT_MODE);
 
 	aw8697_i2c_write_bits(aw8697, AW8697_REG_CONT_CTRL,
@@ -3307,34 +3188,31 @@ static int aw8697_haptic_get_f0(struct aw8697 *aw8697)
 		t_f0_ms * (f0_pre_num + f0_wait_num +
 			   (f0_trace_num + f0_wait_num) * (f0_repeat_num - 1)) +
 		50;
-	usleep_range(t_f0_trace_ms * 1000, t_f0_trace_ms * 1000 + 500);
+	msleep(t_f0_trace_ms);
 
+#if 0
 	for (i = 0; i < f0_cali_cnt; i++) {
-		reg_val = aw8697_get_glb_state(aw8697);
+		mdelay(200);
+		ret = aw8697_i2c_read(aw8697, AW8697_REG_SYSINT, &reg_val);
 		/* f0 calibrate done */
-		if ((reg_val & 0x0f) == 0x00) {
+		if (reg_val & 0x01) {
 			aw8697_haptic_read_f0(aw8697);
 			aw8697_haptic_read_beme(aw8697);
 			break;
 		}
-		usleep_range(10000, 10500);
-		pr_info("%s: f0 cali sleep 10ms\n", __func__);
+		msleep(200);
+		pr_info("%s f0 cali sleep 10ms\n", __func__);
 	}
 
-#ifdef RETRY_F0_CHECK
-	if ((i == f0_cali_cnt) || (aw8697->f0 == 0)) { //Daniel 20210903 modify
-#else
 	if (i == f0_cali_cnt) {
-#endif
 		ret = -1;
 	} else {
 		ret = 0;
 	}
+#endif
 
-#ifndef RETRY_F0_CHECK
 	aw8697_haptic_read_f0(aw8697);
 	aw8697_haptic_read_beme(aw8697);
-#endif
 	/* restore default config */
 	aw8697_i2c_write_bits(aw8697, AW8697_REG_CONT_CTRL,
 			      AW8697_BIT_CONT_CTRL_EN_CLOSE_MASK,
@@ -3649,7 +3527,6 @@ static ssize_t aw8697_file_write(struct file *filp, const char *buff,
 	ret = copy_from_user(pbuff, buff, len);
 	if (ret) {
 		dev_err(aw8697->dev, "%s: copy from user fail\n", __func__);
-		kfree(pbuff);
 		return len;
 	}
 
@@ -3731,7 +3608,6 @@ static int aw8697_haptic_init(struct aw8697 *aw8697)
 	/* haptic audio */
 	aw8697->haptic_audio.delay_val = 1;
 	aw8697->haptic_audio.timer_val = 21318;
-	aw8697->f0_cali_status = true;
 
 	hrtimer_init(&aw8697->haptic_audio.timer, CLOCK_MONOTONIC,
 		     HRTIMER_MODE_REL);
@@ -4001,7 +3877,7 @@ static void aw8697_interrupt_setup(struct aw8697 *aw8697)
 			      AW8697_BIT_SYSINTM_BSTERR_OFF);
 	aw8697_i2c_write_bits(aw8697, AW8697_REG_SYSINTM,
 			      AW8697_BIT_SYSINTM_OV_MASK,
-			      AW8697_BIT_SYSINTM_OV_OFF);
+			      AW8697_BIT_SYSINTM_OV_EN);
 	aw8697_i2c_write_bits(aw8697, AW8697_REG_SYSINTM,
 			      AW8697_BIT_SYSINTM_UVLO_MASK,
 			      AW8697_BIT_SYSINTM_UVLO_EN);
@@ -4033,7 +3909,7 @@ static void aw869xx_interrupt_setup(struct aw8697 *aw8697)
 			      AW869XX_BIT_SYSINTM_BST_SCPM_OFF);
 	aw8697_i2c_write_bits(aw8697, AW869XX_REG_SYSINTM,
 			      AW869XX_BIT_SYSINTM_BST_OVPM_MASK,
-			      AW869XX_BIT_SYSINTM_BST_OVPM_OFF);
+			      AW869XX_BIT_SYSINTM_BST_OVPM_ON);
 	aw8697_i2c_write_bits(aw8697, AW869XX_REG_SYSINTM,
 			      AW869XX_BIT_SYSINTM_UVLM_MASK,
 			      AW869XX_BIT_SYSINTM_UVLM_ON);
@@ -4051,7 +3927,6 @@ static irqreturn_t aw869xx_irq(int irq, void *data)
 	unsigned char reg_val = 0;
 	unsigned int buf_len = 0;
 	unsigned char glb_state_val = 0;
-	unsigned period_size = aw8697->ram.base_addr >> 2;
 
 	aw_dev_info(aw8697->dev, "%s enter\n", __func__);
 	atomic_set(&aw8697->is_in_rtp_loop, 1);
@@ -4093,57 +3968,31 @@ static irqreturn_t aw869xx_irq(int irq, void *data)
 					mutex_unlock(&aw8697->rtp_lock);
 					break;
 				}
-				if (aw8697->is_custom_wave == 1) {
-					buf_len = read_rb(aw8697_rtp->data,
-							  period_size);
-					aw8697_i2c_writes(aw8697,
-							  AW869XX_REG_RTPDATA,
-							  aw8697_rtp->data,
-							  buf_len);
-					if (buf_len < period_size) {
-						pr_info("%s: rtp update complete\n",
-							__func__);
-						aw8697_haptic_set_rtp_aei(
-							aw8697, false);
-						aw8697->rtp_cnt = 0;
-						aw8697->rtp_init = 0;
-						mutex_unlock(&aw8697->rtp_lock);
-						break;
-					}
+				if ((aw8697_rtp->len - aw8697->rtp_cnt) <
+				    (aw8697->ram.base_addr >> 2)) {
+					buf_len = aw8697_rtp->len -
+						  aw8697->rtp_cnt;
 				} else {
-					if ((aw8697_rtp->len -
-					     aw8697->rtp_cnt) <
-					    (aw8697->ram.base_addr >> 2)) {
-						buf_len = aw8697_rtp->len -
-							  aw8697->rtp_cnt;
-					} else {
-						buf_len =
-							(aw8697->ram.base_addr >>
-							 2);
-					}
-					aw8697_i2c_writes(
-						aw8697, AW869XX_REG_RTPDATA,
-						&aw8697_rtp
-							 ->data[aw8697->rtp_cnt],
-						buf_len);
-					aw8697->rtp_cnt += buf_len;
-					aw8697_i2c_read(aw8697,
-							AW869XX_REG_GLBRD5,
-							&glb_state_val);
-					if ((aw8697->rtp_cnt ==
-					     aw8697_rtp->len) ||
-					    ((glb_state_val & 0x0f) == 0)) {
-						aw_dev_info(
-							aw8697->dev,
-							"%s: rtp update complete\n",
-							__func__);
-						aw8697_haptic_set_rtp_aei(
-							aw8697, false);
-						aw8697->rtp_cnt = 0;
-						aw8697->rtp_init = 0;
-						mutex_unlock(&aw8697->rtp_lock);
-						break;
-					}
+					buf_len = (aw8697->ram.base_addr >> 2);
+				}
+				aw8697_i2c_writes(
+					aw8697, AW869XX_REG_RTPDATA,
+					&aw8697_rtp->data[aw8697->rtp_cnt],
+					buf_len);
+				aw8697->rtp_cnt += buf_len;
+				aw8697_i2c_read(aw8697, AW869XX_REG_GLBRD5,
+						&glb_state_val);
+				if ((aw8697->rtp_cnt == aw8697_rtp->len) ||
+				    ((glb_state_val & 0x0f) == 0)) {
+					aw_dev_info(aw8697->dev,
+						    "%s: rtp update complete\n",
+						    __func__);
+					aw8697_haptic_set_rtp_aei(aw8697,
+								  false);
+					aw8697->rtp_cnt = 0;
+					aw8697->rtp_init = 0;
+					mutex_unlock(&aw8697->rtp_lock);
+					break;
 				}
 				mutex_unlock(&aw8697->rtp_lock);
 			}
@@ -4179,9 +4028,9 @@ static irqreturn_t aw8697_irq(int irq, void *data)
 
 	atomic_set(&aw8697->is_in_rtp_loop, 1);
 	aw8697_i2c_read(aw8697, AW8697_REG_SYSINT, &reg_val);
-	pr_info("%s: reg SYSINT=0x%x\n", __func__, reg_val);
+	//pr_info("%s: reg SYSINT=0x%x\n", __func__, reg_val);
 	aw8697_i2c_read(aw8697, AW8697_REG_DBGSTAT, &dbg_val);
-	pr_info("%s: reg DBGSTAT=0x%x\n", __func__, dbg_val);
+	//pr_info("%s: reg DBGSTAT=0x%x\n", __func__, dbg_val);
 
 	if (reg_val & AW8697_BIT_SYSINT_OVI) {
 		pr_err("%s chip ov int error\n", __func__);
@@ -4273,6 +4122,8 @@ static irqreturn_t aw8697_irq(int irq, void *data)
 		aw8697_haptic_set_rtp_aei(aw8697, false);
 	}
 
+	aw8697_i2c_read(aw8697, AW8697_REG_SYSINT, &reg_val);
+	pr_debug("%s: reg SYSINT=0x%x\n", __func__, reg_val);
 	aw8697_i2c_read(aw8697, AW8697_REG_SYSST, &reg_val);
 	pr_debug("%s: reg SYSST=0x%x\n", __func__, reg_val);
 	atomic_set(&aw8697->is_in_rtp_loop, 0);
@@ -5741,30 +5592,13 @@ static ssize_t aw8697_f0_show(struct device *dev, struct device_attribute *attr,
 {
 	struct aw8697 *aw8697 = dev_get_drvdata(dev);
 	ssize_t len = 0;
-#ifdef RETRY_F0_CHECK
-	unsigned int f0_cnt_time = 0;
-#endif
 
 	mutex_lock(&aw8697->lock);
 	aw8697->f0_cali_flag = AW8697_HAPTIC_LRA_F0;
 	if (aw8697->chip_version == AW8697_CHIP_9X) {
 		aw8697_haptic_get_f0(aw8697);
-#ifdef RETRY_F0_CHECK
-		f0_cnt_time = 1;
-		if ((f0_cnt_time == 1) && (aw8697->f0 == 0)) {
-			aw8697_haptic_get_f0(aw8697);
-			f0_cnt_time = 0;
-		}
-#endif
 	} else {
 		aw869xx_haptic_cont_get_f0(aw8697);
-#ifdef RETRY_F0_CHECK
-		f0_cnt_time = 1;
-		if ((f0_cnt_time == 1) && (aw8697->f0 == 0)) {
-			aw8697_haptic_get_f0(aw8697);
-			f0_cnt_time = 0;
-		}
-#endif
 	}
 	mutex_unlock(&aw8697->lock);
 	len +=
@@ -6354,58 +6188,6 @@ static ssize_t aw8697_f0_value_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%d\n", aw8697->f0);
 }
 
-static ssize_t aw8697_f0_check_show(struct device *dev,
-				    struct device_attribute *attr, char *buf)
-{
-	struct aw8697 *aw8697 = dev_get_drvdata(dev);
-	ssize_t len = 0;
-
-	if (aw8697->f0_cali_status == true)
-		len += snprintf(buf + len, PAGE_SIZE - len, "%d\n", 1);
-	if (aw8697->f0_cali_status == false)
-		len += snprintf(buf + len, PAGE_SIZE - len, "%d\n", 0);
-
-	return len;
-}
-
-#ifdef SUPPORT_RELOAD_FW
-static ssize_t aw8697_vov_show(struct device *dev,
-			       struct device_attribute *attr, char *buf)
-{
-	struct aw8697 *aw8697 = dev_get_drvdata(dev);
-	ssize_t len = 0;
-
-	len += snprintf(buf + len, PAGE_SIZE - len, "0x%02x\n",
-			aw8697->info.bst_vol_ram);
-
-	return len;
-}
-
-static ssize_t aw8697_vov_store(struct device *dev,
-				struct device_attribute *attr, const char *buf,
-				size_t count)
-{
-	struct aw8697 *aw8697 = dev_get_drvdata(dev);
-	unsigned int val = 0;
-	int rc = 0;
-
-	rc = kstrtouint(buf, 0, &val);
-	if (rc < 0)
-		return rc;
-	if (val == 1) {
-		aw8697->vov = 1;
-		aw8697->info.bst_vol_ram = 0x10;
-		pr_info("set ux value: 0x%02x, update ram\n",
-			aw8697->info.bst_vol_ram);
-		aw8697->ram_name = aw8697_ram_name_a;
-		queue_delayed_work(aw8697->work_queue, &aw8697->ram_work,
-				   msecs_to_jiffies(5000));
-	}
-
-	return count;
-}
-#endif
-
 static ssize_t aw869xx_cont_wait_num_show(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
@@ -6572,7 +6354,6 @@ static DEVICE_ATTR(ram_vbat_comp, S_IWUSR | S_IRUGO, aw8697_ram_vbat_comp_show,
 		   aw8697_ram_vbat_comp_store);
 static DEVICE_ATTR(osc_cali, S_IWUSR | S_IRUGO, aw8697_osc_cali_show,
 		   aw8697_osc_cali_store);
-static DEVICE_ATTR(f0_check, S_IWUSR | S_IRUGO, aw8697_f0_check_show, NULL);
 static DEVICE_ATTR(f0_save, S_IWUSR | S_IRUGO, aw8697_f0_save_show,
 		   aw8697_f0_save_store);
 static DEVICE_ATTR(osc_save, S_IWUSR | S_IRUGO, aw8697_osc_cali_show,
@@ -6580,9 +6361,6 @@ static DEVICE_ATTR(osc_save, S_IWUSR | S_IRUGO, aw8697_osc_cali_show,
 static DEVICE_ATTR(f0_value, S_IRUGO, aw8697_f0_value_show, NULL);
 static DEVICE_ATTR(custom_wave, S_IWUSR | S_IRUGO, aw8697_custom_wave_show,
 		   aw8697_custom_wave_store);
-#ifdef SUPPORT_RELOAD_FW
-static DEVICE_ATTR(vov, S_IWUSR | S_IRUGO, aw8697_vov_show, aw8697_vov_store);
-#endif
 
 /* aw869x */
 static DEVICE_ATTR(cont_td, S_IWUSR | S_IRUGO, aw8697_cont_td_show,
@@ -6605,44 +6383,23 @@ static DEVICE_ATTR(cont_brk_time, S_IWUSR | S_IRUGO, aw869xx_cont_brk_time_show,
 		   aw869xx_cont_brk_time_store);
 
 static struct attribute *aw8697_vibrator_attributes[] = {
-	&dev_attr_reg.attr,
-	&dev_attr_ram.attr,
-	&dev_attr_activate_test.attr,
-	&dev_attr_effect_id.attr,
-	&dev_attr_bst_vol.attr,
-	&dev_attr_duration.attr,
-	&dev_attr_activate.attr,
-	&dev_attr_activate_mode.attr,
-	&dev_attr_index.attr,
-	&dev_attr_vmax.attr,
-	&dev_attr_gain.attr,
-	&dev_attr_seq.attr,
-	&dev_attr_loop.attr,
-	&dev_attr_rtp.attr,
-	&dev_attr_ram_update.attr,
-	&dev_attr_f0.attr,
-	&dev_attr_cali.attr,
-	&dev_attr_cont.attr,
-	&dev_attr_cont_td.attr,
-	&dev_attr_cont_drv.attr,
-	&dev_attr_cont_num_brk.attr,
-	&dev_attr_cont_zc_thr.attr,
-	&dev_attr_vbat_monitor.attr,
-	&dev_attr_lra_resistance.attr,
-	&dev_attr_auto_boost.attr,
-	&dev_attr_prctmode.attr,
-	&dev_attr_trig.attr,
-	&dev_attr_ram_vbat_comp.attr,
-	&dev_attr_osc_cali.attr,
-	&dev_attr_f0_check.attr,
-	&dev_attr_osc_save.attr,
-	&dev_attr_f0_save.attr,
-	&dev_attr_f0_value.attr,
-	&dev_attr_custom_wave.attr,
-#ifdef SUPPORT_RELOAD_FW
-	&dev_attr_vov.attr,
-#endif
-	NULL
+	&dev_attr_reg.attr,	      &dev_attr_ram.attr,
+	&dev_attr_activate_test.attr, &dev_attr_effect_id.attr,
+	&dev_attr_bst_vol.attr,	      &dev_attr_duration.attr,
+	&dev_attr_activate.attr,      &dev_attr_activate_mode.attr,
+	&dev_attr_index.attr,	      &dev_attr_vmax.attr,
+	&dev_attr_gain.attr,	      &dev_attr_seq.attr,
+	&dev_attr_loop.attr,	      &dev_attr_rtp.attr,
+	&dev_attr_ram_update.attr,    &dev_attr_f0.attr,
+	&dev_attr_cali.attr,	      &dev_attr_cont.attr,
+	&dev_attr_cont_td.attr,	      &dev_attr_cont_drv.attr,
+	&dev_attr_cont_num_brk.attr,  &dev_attr_cont_zc_thr.attr,
+	&dev_attr_vbat_monitor.attr,  &dev_attr_lra_resistance.attr,
+	&dev_attr_auto_boost.attr,    &dev_attr_prctmode.attr,
+	&dev_attr_trig.attr,	      &dev_attr_ram_vbat_comp.attr,
+	&dev_attr_osc_cali.attr,      &dev_attr_osc_save.attr,
+	&dev_attr_f0_save.attr,	      &dev_attr_f0_value.attr,
+	&dev_attr_custom_wave.attr,   NULL
 };
 
 static struct attribute_group aw8697_vibrator_attribute_group = {
@@ -6681,7 +6438,6 @@ static struct attribute *aw869xx_vibrator_attributes[] = {
 	&dev_attr_prctmode.attr,
 	&dev_attr_ram_vbat_comp.attr,
 	&dev_attr_f0_value.attr,
-	&dev_attr_custom_wave.attr,
 	NULL
 };
 
